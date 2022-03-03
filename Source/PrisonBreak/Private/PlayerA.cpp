@@ -59,17 +59,17 @@ APlayerA::APlayerA()
 	// 걷는 속도
 	UCharacterMovementComponent* MovementPtr = Cast<UCharacterMovementComponent>(GetCharacterMovement());
 	MovementPtr->MaxWalkSpeed = 300;
-	
+
 	// 뛸 때 속도 2배
 	SprintSpeedMultiplier = 2.0f;
-
 }
 
 // Called when the game starts or when spawned
 void APlayerA::BeginPlay()
 {
 	Super::BeginPlay();
-
+	
+	target = UGameplayStatics::GetActorOfClass(GetWorld(), ADoor::StaticClass());
 }
 
 // Called every frame
@@ -77,27 +77,22 @@ void APlayerA::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (interact == 1 && isInTrigger == true)
+	switch (aState)
 	{
-		cuttingComplete += DeltaTime + cuttingTime;
+	case EPlayerAState::CanLock:
+		CanLock();
+		break;
+	case EPlayerAState::Locking:
+		Locking();
+		break;
+	case EPlayerAState::CanWatch:
+		CanWatch();
+		break;
+	case EPlayerAState::Talk:
+		Talk();
+		break;
 	}
 
-	if (cuttingComplete> 3)
-	{
-		door = Cast<ADoor>(GetOwner());
-		door->Destroy();
-	}
-
-	if (interactTwo == 1)
-	{
-		GetWorld()->GetFirstPlayerController()->UnPossess();
-		if (GetWorld()->GetFirstPlayerController() == nullptr)
-		{
-			CALLINFO();
-			cctv = Cast<ACCTV>(GetOwner());
-			cctv->GetWorld()->GetFirstPlayerController()->Possess(cctv);
-		}
-	}
 }
 
 // Called to bind functionality to input
@@ -112,24 +107,34 @@ void APlayerA::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	PlayerInputComponent->BindAction("Run", IE_Released, this, &APlayerA::StopSprinting);
 
 	// 플레이어 상호작용 키 바인드
-	PlayerInputComponent->BindAxis(TEXT("Interaction"), this, &APlayerA::OnInteraction);
-	PlayerInputComponent->BindAxis(TEXT("InteractionTwo"), this, &APlayerA::OnInteractionTwo);
+	PlayerInputComponent->BindAction("PlayerAInteract", IE_Pressed, this, &APlayerA::OnInteraction);
+	PlayerInputComponent->BindAction("PlayerAInteract", IE_Released, this, &APlayerA::DeInteraction);
 }
 
-
-void APlayerA::OnInteraction(float value)
+// 만약 문 앞에 있고 문을 열 수 있는 상태 일 때
+// F 키를 누르면 문을 여는 상태가 된다.
+void APlayerA::OnInteraction()
 {
-	if (Controller != NULL && value != 0.0)
+	if ( isInTrigger == true && aState == EPlayerAState::CanLock)
 	{
-		interact = value;
+		CALLINFO();
+		aState = EPlayerAState::Locking;
 	}
+
+	   if (isInTrigger == true && aState == EPlayerAState::CanWatch)
+   {
+      aState = EPlayerAState::Talk;
+   }
 }
 
-void APlayerA::OnInteractionTwo(float value)
+// 만약 문을 다 열지 않았을때
+// F 키를 떼면 문을 열 수 있는 상태가 된다.
+void APlayerA::DeInteraction()
 {
-	if (Controller != NULL && value != 0.0)
+	if (isInTrigger == true && aState == EPlayerAState::Locking && cuttingTime < cuttingComplete)
 	{
-		interactTwo = value;
+		CALLINFO();
+		aState = EPlayerAState::CanLock;
 	}
 }
 
@@ -145,7 +150,6 @@ void APlayerA::StopSprinting()
 	GetCharacterMovement()->MaxWalkSpeed /= SprintSpeedMultiplier;
 }
 
-// 이동
 void APlayerA::MoveForward(float value)
 {
 	if (Controller != NULL && value != 0.0) {
@@ -154,5 +158,53 @@ void APlayerA::MoveForward(float value)
 		// 어느 쪽이 전방인지 알아내어, 플레이어가 그 방향으로 이동하고자 한다고 기록
 		const FVector direction = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
 		AddMovementInput(direction, value);
+	}
+}
+
+void APlayerA::CanWatch()
+{
+	if (M_idle) {
+		PlayAnimMontage(M_idle, 1, NAME_None);
+	}
+}
+
+// 플레이어가 문을 열 수 있는 상태
+void APlayerA::CanLock()
+{
+	if (M_idle) {
+		PlayAnimMontage(M_idle, 1, NAME_None);
+	}
+}
+
+// 플레이어가 문을 여는 중 인 상태
+void APlayerA::Locking()
+{
+	cuttingTime += GetWorld()->DeltaTimeSeconds;
+	PRINTLOG(TEXT("%f"), cuttingTime);
+
+	if (cuttingTime / 0.5f == 0)
+	{
+		UGameplayStatics::PlaySound2D(GetWorld(), unlockSound);
+	}
+
+	// 탈출 애니메이션 실행
+	if (M_escape) {
+		PlayAnimMontage(M_escape, 1, NAME_None);
+	}
+
+	// 만약 문을 다 열었다면 망을 볼 수 있는 상태가 된다. 
+	if (cuttingTime > cuttingComplete)
+	{
+		UGameplayStatics::PlaySound2D(GetWorld(), unlockCompleteSound);
+		lockComplete = true;
+		aState = EPlayerAState::CanWatch;
+	}
+}
+
+// 플레이어가 교도관과 대화하는 상태
+void APlayerA::Talk()
+{
+	if (M_talking) {
+		PlayAnimMontage(M_talking, 1, NAME_None);
 	}
 }

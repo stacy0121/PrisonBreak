@@ -5,12 +5,16 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Door.h"
+#include <Kismet/GameplayStatics.h>
+#include "PlayerA.h"
+#include "PrisonBreak.h"
 
 
 // Sets default values
 APlayerB::APlayerB()
 {
- 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	// 부드러운 움직임
@@ -65,13 +69,31 @@ void APlayerB::BeginPlay()
 {
 	Super::BeginPlay();
 
+	playerA = Cast<APlayerA>(UGameplayStatics::GetActorOfClass(GetWorld(), APlayerA::StaticClass()));
 }
 
 // Called every frame
 void APlayerB::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	switch (bState)
+	{
+ 	case EPlayerBState::B_CanLock:
+ 		B_CanLock();
+ 		break;
+ 	case EPlayerBState::B_Locking:
+ 		B_Locking();
+ 		break;
+	case EPlayerBState::B_CanWatch:
+		B_CanWatch();
+		break;
+	case EPlayerBState::B_Talk:
+		B_Talk();
+		break;
+	case EPlayerBState::B_End:
+		B_End();
+		break;
+	}
 }
 
 // Called to bind functionality to input
@@ -81,13 +103,12 @@ void APlayerB::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 
 	check(PlayerInputComponent);
 	PlayerInputComponent->BindAxis("PlayerBMoveForward", this, &APlayerB::MoveForward);
-	PlayerInputComponent->BindAxis("PlayerBTurn", this, &APawn::AddControllerYawInput);
+	PlayerInputComponent->BindAxis("PlayerBTurn", this, &APlayerB::Turn);
 
 	PlayerInputComponent->BindAction("PlayerBRun", IE_Pressed, this, &APlayerB::Sprint);
 	PlayerInputComponent->BindAction("PlayerBRun", IE_Released, this, &APlayerB::StopSprinting);
 }
 
-// 이동
 void APlayerB::MoveForward(float value)
 {
 	if (Controller != NULL && value != 0.0) {
@@ -96,6 +117,39 @@ void APlayerB::MoveForward(float value)
 		// 어느 쪽이 전방인지 알아내어, 플레이어가 그 방향으로 이동하고자 한다고 기록
 		const FVector direction = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
 		AddMovementInput(direction, value);
+	}
+}
+
+void APlayerB::Turn(float value)
+{
+	if (value != 0.f && Controller && Controller->IsLocalPlayerController())
+	{
+		APlayerController* const PC = CastChecked<APlayerController>(Controller);
+		PC->AddYawInput(value);
+	}
+}
+
+// 플레이어가 상호작용 키를 눌렀을 때
+void APlayerB::B_OnInteract()
+{
+	if (bIsInTrigger == true && bState == EPlayerBState::B_CanLock )
+	{
+		CALLINFO();
+		bState = EPlayerBState::B_Locking;
+	}
+
+	if (bIsInTrigger == true && bState == EPlayerBState::B_CanWatch)
+	{
+		bState = EPlayerBState::B_Talk;
+	}
+}
+
+// 플레이어가 상호작용 키를 뗐을 때
+void APlayerB::B_DeInteract()
+{
+	if (bIsInTrigger == true && bState == EPlayerBState::B_Locking && bCuttingTime < bCuttingTimeMax)
+	{
+		bState = EPlayerBState::B_CanLock;
 	}
 }
 
@@ -108,4 +162,52 @@ void APlayerB::Sprint()
 void APlayerB::StopSprinting()
 {
 	GetCharacterMovement()->MaxWalkSpeed /= SprintSpeedMultiplier;
+}
+
+// 플레이어가 문을 열 수 있는 상태
+void APlayerB::B_CanLock()
+{
+	if (M_idle) {
+		PlayAnimMontage(M_idle, 1, NAME_None);
+	}
+}
+
+// 플레이어가 문을 여는 중 인 상태
+void APlayerB::B_Locking()
+{
+	bCuttingTime += GetWorld()->DeltaTimeSeconds;
+
+	// 탈출 애니메이션 실행
+	if (M_escape) {
+		PlayAnimMontage(M_escape, 1, NAME_None);
+	}
+
+	if (bCuttingTime > bCuttingTimeMax)
+	{
+		bState = EPlayerBState::B_End;
+	}
+}
+
+// 플레이어가 망을 보거나 대화를 할 수 있는 상태
+void APlayerB::B_CanWatch()
+{
+	if (playerA->lockComplete == true)
+	{
+		bState = EPlayerBState::B_CanLock;
+	}
+}
+
+// 플레이어가 교도관과 대화하는 상태
+void APlayerB::B_Talk()
+{
+	if (M_talking) {
+		PlayAnimMontage(M_talking, 1, NAME_None);
+	}
+}
+
+void APlayerB::B_End()
+{
+	if (M_idle) {
+		PlayAnimMontage(M_idle, 1, NAME_None);
+	}
 }

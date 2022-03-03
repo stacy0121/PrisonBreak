@@ -5,6 +5,7 @@
 #include <Components/BoxComponent.h>
 #include <Components/StaticMeshComponent.h>
 #include "PlayerA.h"
+#include "PlayerB.h"
 #include "PrisonBreak.h"
 
 // Sets default values
@@ -38,21 +39,36 @@ void ADoor::Tick(float DeltaTime)
 
 void ADoor::OnBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	auto player = Cast<APlayerA>(OtherActor);
+	auto playerA = Cast<APlayerA>(OtherActor);
 
-	if (player)
+	if (playerA)
 	{
-		player->isInTrigger = true;
+		playerA->isInTrigger = true;
 	}
+
+	auto playerB = Cast<APlayerB>(OtherActor);
+	
+	if (playerB)
+	{
+		playerB->bIsInTrigger = true;
+	}
+
 }
 
 void ADoor::OnEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
-	auto player = Cast<APlayerA>(OtherComp);
+	auto playerA = Cast<APlayerA>(OtherActor);
 
-	if (player)
+	if (playerA)
 	{
-		player->isInTrigger = false;
+		playerA->isInTrigger = false;
+	}
+
+	auto playerB = Cast<APlayerB>(OtherActor);
+
+	if (playerB)
+	{
+		playerB->bIsInTrigger = false;
 	}
 }
 

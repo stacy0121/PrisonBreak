@@ -2,6 +2,8 @@
 
 
 #include "EnemyFSM.h"
+#include "Enemy.h"
+
 
 // Sets default values for this component's properties
 UEnemyFSM::UEnemyFSM()
@@ -19,7 +21,6 @@ void UEnemyFSM::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
 	
 }
 

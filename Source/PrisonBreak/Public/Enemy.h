@@ -25,5 +25,13 @@ public:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	
+	//enemy의 trigger box(감옥 문앞) 진입 여부
+
+	UPROPERTY()
+		bool inEnemyTriggerA;
+
+	UPROPERTY()
+		bool inEnemyTriggerB;
 
 };
